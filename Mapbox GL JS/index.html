@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Mapbox GL JS map</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
+
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
+  <script src="turf.min.js" charset="utf-8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      color: #404040;
+      font:
+        400 30px/22px 'Source Sans Pro',
+        'Helvetica Neue',
+        sans-serif;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: 20% 80%;
+      grid-template-rows: 0.1fr 0.1fr 5fr 0.1fr;
+      grid-template-areas:
+        "headMain headMain"
+        "top top"
+        "sidebar mapbox"
+        "sidebar mapbox";
+      height: 100vh;
+
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0;
+      font-weight: 400;
+      line-height: 20px;
+      padding: 20px 2px;
+    }
+
+    a {
+      color: #404040;
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: #101010;
+    }
+
+    .sidebar {
+      grid-area: sidebar;
+      border-right: 1px solid rgb(0 0 0 / 25%);
+      background-color: #a5cfed;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .headMain {
+      grid-area: headMain;
+      background-color: #a5cfed;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .map {
+      grid-area: mapbox;
+      background-color: aqua;
+      height: 100%;
+      width: 100%;
+    }
+
+    .heading {
+      grid-area: top;
+      background: #2980be;
+      color: white;
+      border-bottom: 1px solid #eee;
+    }
+  </style>
+</head>
+
+<body> 
+  <div class="headMain">
+    <h1>Misael Santa Cruz</h1>
+  </div>
+  <div class="sidebar">
+    <h1>Current Time</h1>
+    <div id="clock"></div>
+    <h1>Updated Time</h1>
+    <div id="location_time"></div>
+    <h1>Updated Date</h1>
+    <div id="location_date"></div>
+  </div>
+  <div class="heading">
+    <h1>Mapbox Geofencing</h1>
+  </div>
+  <div id="listings" class="listings"></div>
+  <div id="map" class="map"></div>
+  <script type="module">
+    // * * * MAPBOX
+    mapboxgl.accessToken = 'pk.eyJ1IjoicG90YXRvZXMxMDEiLCJhIjoiY21mdThuNjRrMG92MzJxcTF2d3hhaWtncyJ9.QhHx6w_9pXEkoEsym73QEg';
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/navigation-night-v1',
+      center: [-74.5, 40],
+      zoom: 2
+    });
+
+    const nav = new mapboxgl.NavigationControl({
+      visualizePitch: true
+    });
+    map.addControl(nav, 'bottom-right');
+
+    // * * * FIREBASE
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+    //import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAY1VhwMrufq3Q8tgTe9V-385yeLQcd-cA",
+      authDomain: "mapbox-database-45b57.firebaseapp.com",
+      databaseURL: "https://mapbox-database-45b57-default-rtdb.firebaseio.com",
+      projectId: "mapbox-database-45b57",
+      storageBucket: "mapbox-database-45b57.firebasestorage.app",
+      messagingSenderId: "549069501061",
+      appId: "1:549069501061:web:022c3ab53cab6ebb63efec",
+      measurementId: "G-7Q8WQWB66N"
+    };
+
+    const app = initializeApp(firebaseConfig);
+
+
+    import { getDatabase, ref, child, get, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+
+    const db = getDatabase();
+    const locationLat = ref(db, 'PhoneLocation/');
+
+    onValue(locationLat, (snapshot) => {
+      const data = snapshot.val();
+      console.log(data);
+
+      const camera = map.getFreeCameraOptions();
+
+      const position = [data.locationLong, data.locationLat];
+      const altitude = 3000;
+
+      map.on('load', async () => {
+
+        let long = data.locationLong
+        let lat = data.locationLat
+
+
+
+        var center = [long, lat];
+        var radius = 0.05;
+        var options = { steps: 30, units: "kilometers", properties: { foo: "bar" } };
+        var circle = turf.circle(center, radius, options);
+
+        //geofence 
+        map.addSource('fencedata', {
+          type: 'geojson',
+          data: circle
+
+        });
+        console.log(data.locationLat)
+        map.addLayer({
+          'id': 'fence',
+          'type': 'fill',
+          "source": "fencedata",
+          'layout': {},
+          'paint': {
+            'fill-color': '#2fba4a',
+            'fill-opacity': 0.3
+          }
+        });
+
+
+        //points 
+        map.addSource("pointdata", {
+          type: "geojson",
+          data: {
+            "type": "FeatureCollection",
+            "features": [{
+              "type": "Feature",
+              "properties": {},
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  long,
+                  lat
+                ]
+              }
+            }]
+          },
+          cluster: true,
+          clusterRadius: 20
+        });
+
+        map.addLayer({
+          "id": "points",
+          "type": "circle",
+          "source": "pointdata",
+          "paint": {
+            'circle-color': 'rgba(256, 256, 256, 1.0)',
+            'circle-radius': 8
+          }
+        });
+        const MAP_CENTER = [long, lat];
+        var distance = turf.pointToPolygonDistance([long, lat], circle)
+        console.log(distance)
+        alert("User is out of range! Please get back to the geofence");
+
+      });
+
+      camera.position = mapboxgl.MercatorCoordinate.fromLngLat(position, altitude);
+      camera.lookAtPoint([data.locationLong, data.locationLat]);
+
+      map.setFreeCameraOptions(camera);
+      const marker = new mapboxgl.Marker()
+        .setLngLat([data.locationLong, data.locationLat])
+        .addTo(map);
+
+      const currentTime = document.getElementById('location_time')
+      currentTime.textContent = data.time
+      const currentdate = document.getElementById('location_date')
+      currentdate.textContent = data.date
+    });
+
+    const clock = document.getElementById('clock')
+    const updateClock = () => {
+      const today = new Date()
+      const hours = today.getHours().toString().padStart(2, '0')
+      const minutes = today.getMinutes().toString().padStart(2, '0')
+      const seconds = today.getSeconds().toString().padStart(2, '0')
+      clock.textContent = `${hours}:${minutes}:${seconds}`
+    }
+    setInterval(updateClock, 1000)
+    updateClock()
+  </script>
+
+</body>
+
+</html>
